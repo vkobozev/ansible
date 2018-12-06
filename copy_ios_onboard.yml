@@ -1,0 +1,49 @@
+---
+
+- hosts: all
+  
+  vars_files: 
+  - ../credentials.yml
+ 
+  tasks:
+  - name: get facts
+    ios_facts:
+      gather_subset: hardware
+    register: hw_facts
+ 
+  - name: store new image info
+    set_fact:
+      ios_filenames_file: all_images.csv
+
+  - name: Lookup New Image File Name And Validation Hash From .CSV File - as image_file
+    set_fact:
+      image_file: "{{ lookup('csvfile', inventory_hostname + ' file='+ ios_filenames_file +' delimiter=, col=1')| regex_replace('^ ', '') }}"
+      expected_hash: "{{ lookup('csvfile', inventory_hostname + ' file='+ ios_filenames_file +' delimiter=, col=2')| regex_replace('^ ', '') }}"
+
+  - name: "Copy New Image File To Device"
+    ntc_file_copy:
+      platform: cisco_ios_ssh
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_ssh_user }}"
+      password: "{{ ansible_ssh_pass }}"
+      file_system: "{{ansible_net_filesystems[0]}}"
+      local_file: "/ftp/{{ image_file }}"
+    register: did_copy
+    when:
+      - "ansible_net_image.split(':')[-1].split('.')[0] == image_file.split('.')[0]"
+  
+  - debug: var=did_copy
+  
+  - name: "Verify New Image File On Device"
+    ios_command:
+      commands:
+        - "verify /md5 {{image_file}}"
+      timeout: 360
+      wait_for: "result[0] contains {{expected_hash}}"
+    ignore_errors: True
+    register: new_hash
+
+  - name: "Show the Hash"
+    debug:
+      msg: ",got:, {{new_hash.stdout_lines[-1][-1].split('=')[-1].replace(' ','')}}, expected:, {{expected_hash}}"
+    failed_when: "expected_hash not in new_hash.stdout_lines[-1][-1].split('=')[-1]"
