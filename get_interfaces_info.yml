@@ -1,0 +1,24 @@
+---
+
+- hosts: all
+  
+  vars_files: 
+  - ../credentials.yml
+  
+  tasks:
+  - name: show ip int br
+    ntc_show_command:
+      host: "{{ ansible_host }}"
+      username: "{{ ansible_ssh_user }}"
+      password: "{{ ansible_ssh_pass }}"
+      platform: cisco_ios_ssh
+      command: 'show ip interface brief'
+      template_dir: ntc_templates
+    when: ansible_network_os == "ios"
+    register: result
+   
+  - name: store facts on localhost
+    local_action:
+      module: copy
+      content: "{{ result['response'] }}"
+      dest: files/{{ ansible_host }}
