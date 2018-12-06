@@ -1,0 +1,28 @@
+---
+
+- hosts: all
+
+  vars_files:
+  - ../credentials.yml
+
+  tasks:
+  - name: config logg
+    ios_logging:
+      dest: host
+      name: 10.10.10.10
+      state: present
+    when: ansible_network_os == "ios"
+
+  - name: config logg
+    ios_config:
+      lines: logging server 10.10.10.10
+    when: ansible_network_os == "nxos"
+
+  - name: show logg
+    ios_command:
+      commands: sh run | i 10.10.10.10
+    register: logg
+
+  - name: local
+    shell: "echo {{ sysname }},{{ ansible_host }},{{ logg.stdout[0] }} >> /tmp/ansible-config-logging.log"
+    delegate_to: 127.0.0.1  
